@@ -1,0 +1,8 @@
+.tools/
+**/bin/
+**/obj/
+.vs/
+artifacts/
+TestResults/
+*.user
+*.log

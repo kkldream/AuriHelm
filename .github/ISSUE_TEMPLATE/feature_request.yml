@@ -1,0 +1,16 @@
+name: 功能建議
+description: 說明使用情境與期待改善的操作
+title: "[建議] "
+body:
+  - type: textarea
+    id: scenario
+    attributes:
+      label: 使用情境與目前遇到的問題
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: 預期行為與可接受的取捨
+    validations:
+      required: true

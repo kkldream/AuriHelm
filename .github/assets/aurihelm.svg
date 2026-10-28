@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <title>AuriHelm：聲波旋鈕</title>
+  <defs><linearGradient id="tile" x2="1" y2="1"><stop stop-color="#193A60"/><stop offset="1" stop-color="#0E263E"/></linearGradient></defs>
+  <rect width="64" height="64" rx="13" fill="url(#tile)"/>
+  <g stroke="#26A5ED" stroke-width="4.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M47.6 16.4A22 22 0 1 0 54 32M43 21L52 12"/>
+    <path stroke="#EFF6FF" d="M22 29V36M30 24V40M38 28V36"/>
+  </g>
+</svg>

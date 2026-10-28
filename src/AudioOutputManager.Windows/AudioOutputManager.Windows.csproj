@@ -1,0 +1,4 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net10.0-windows10.0.26100.0</TargetFramework><SupportedOSPlatformVersion>10.0.22000.0</SupportedOSPlatformVersion><AllowUnsafeBlocks>true</AllowUnsafeBlocks></PropertyGroup>
+  <ItemGroup><ProjectReference Include="../AudioOutputManager.Core/AudioOutputManager.Core.csproj" /><PackageReference Include="NAudio.Wasapi" Version="2.2.1" /></ItemGroup>
+</Project>

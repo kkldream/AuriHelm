@@ -1,0 +1,30 @@
+name: 問題回報
+description: 回報可重現的功能或畫面問題
+title: "[問題] "
+body:
+  - type: markdown
+    attributes:
+      value: 安全問題請依 SECURITY.md 通報。請遮蔽個人路徑、裝置識別碼與不必要的診斷內容。
+  - type: input
+    id: version
+    attributes:
+      label: AuriHelm 版本
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Windows 版本與相關音訊裝置
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 重現步驟、預期行為與實際結果
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: 截圖或必要診斷
+      description: 僅附與此問題相關、已檢查隱私的內容。
