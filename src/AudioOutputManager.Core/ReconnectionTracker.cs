@@ -28,6 +28,11 @@ public sealed class ReconnectionTracker(TimeProvider? time=null)
     public bool IsExpectedReturn(string? id,IReadOnlyList<string> priority)
         =>id is not null&&priority.Contains(id)&&returned.TryGetValue(id,out var arrival)&&clock.GetElapsedTime(arrival)<=NotificationLimit;
 
+    // A removal callback can wait behind the operation gate until its old endpoint is back.
+    // Compare receipt time with the observed return so later user choices stay effective.
+    public bool IsDelayedRemoval(string? previous,long receivedAt,IReadOnlyList<string> priority)
+        =>IsExpectedReturn(previous,priority)&&receivedAt<returned[previous!];
+
     public void Settle(AudioSnapshot snapshot,string? headsetId,HeadsetState confirmed,bool readingFresh)
     {
         foreach(var (id,arrival) in returned.ToArray())

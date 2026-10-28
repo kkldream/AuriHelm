@@ -165,6 +165,40 @@ public sealed class ReconnectionTests
         }
         finally{release.Set();controller.Dispose();Directory.Delete(directory,true);}
     }
+    [Fact] public async Task DelayedRemovalAfterObservedDisconnectKeepsAutomaticWithoutSystemRestoration()
+    {
+        string directory=Path.Combine(Path.GetTempPath(),"aom-reconnect-fallback-"+Guid.NewGuid().ToString("N"));
+        var audio=new Audio();var headset=new Headset();
+        new SettingsStore(directory).Save(new(){Automatic=true,Priority=["headset","speaker"]});
+        using var release=new ManualResetEventSlim();
+        var entered=new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var controller=new AppController(directory,audio,headset);
+        var diagnostic=new System.Collections.Concurrent.ConcurrentQueue<string>();
+        controller.Diagnostic+=diagnostic.Enqueue;
+        int reads=0;
+        try
+        {
+            await controller.StartAsync();
+            await Until(()=>controller.Snapshot.CurrentId=="headset"&&controller.Snapshot.RolesConsistent);
+            headset.Connected=false;
+            // Let one removal callback observe the missing device, then hold a queued callback.
+            audio.DeviceWithBlockedRead(false,()=>
+            {
+                if(Interlocked.Increment(ref reads)==2){entered.TrySetResult();release.Wait();}
+            });
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(3));
+            Assert.DoesNotContain(controller.Snapshot.Outputs,d=>d.Id=="headset");
+            int queries=headset.Queries;
+            headset.Connected=true;audio.Device(true,false,false);
+            release.Set();
+            await Until(()=>headset.Queries>=queries+3&&controller.Headset.State==HeadsetState.On);
+            Assert.True(controller.Settings.Automatic,string.Join(Environment.NewLine,diagnostic));
+            await Until(()=>controller.Snapshot.RolesConsistent&&controller.Snapshot.CurrentId=="headset");
+            audio.External("speaker");
+            await Until(()=>!controller.Settings.Automatic);
+        }
+        finally{release.Set();controller.Dispose();Directory.Delete(directory,true);}
+    }
     [Fact] public async Task ReplugBetweenDefaultSnapshotAndAvailabilityCheckKeepsAutomatic()
     {
         string directory=Path.Combine(Path.GetTempPath(),"aom-reconnect-read-race-"+Guid.NewGuid().ToString("N"));

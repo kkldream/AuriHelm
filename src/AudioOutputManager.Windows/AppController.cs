@@ -141,6 +141,7 @@ public sealed class AppController : IDisposable
     }
     private void OnDefault(AudioRole role,string? id)
     {
+        long receivedAt=TimeProvider.System.GetTimestamp();
         lock(lifetime)
         {
         if(disposing)return;
@@ -150,10 +151,10 @@ public sealed class AppController : IDisposable
         if(previous==id) return;
         Interlocked.Increment(ref pendingDefaultChanges);
         switches.Invalidate();
-        ScheduleCallback(()=>HandleExternalAsync(role,previous,id));
+        ScheduleCallback(()=>HandleExternalAsync(role,previous,id,receivedAt));
         }
     }
-    private async Task HandleExternalAsync(AudioRole role,string? previous,string? current)
+    private async Task HandleExternalAsync(AudioRole role,string? previous,string? current,long receivedAt)
     {
         try
         {
@@ -176,9 +177,10 @@ public sealed class AppController : IDisposable
                     // availability query can already see a replug after the removal snapshot.
                     bool disconnected=previous is not null&&!Snapshot.Outputs.Any(d=>d.Id==previous&&d.Available);
                     bool returning=reconnections.IsExpectedReturn(current,Settings.Priority);
-                    if(disconnected||returning)lastAutomaticTarget=null;
-                    if(returning)Diagnostic?.Invoke("device-return-default");
-                    if(!disconnected&&!returning&&Settings.Automatic)
+                    bool delayedRemoval=reconnections.IsDelayedRemoval(previous,receivedAt,Settings.Priority);
+                    if(disconnected||returning||delayedRemoval)lastAutomaticTarget=null;
+                    if(returning||delayedRemoval)Diagnostic?.Invoke("device-return-default");
+                    if(!disconnected&&!returning&&!delayedRemoval&&Settings.Automatic)
                     {
                         Settings=Settings with { Automatic=false }; // Stop even when saving fails.
                         reconnections.ClearPending();

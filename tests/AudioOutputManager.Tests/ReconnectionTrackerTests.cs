@@ -39,4 +39,17 @@ public sealed class ReconnectionTrackerTests
         tracker.Settle(Snapshot(true,"headset"),"headset",HeadsetState.On,true);
         Assert.False(tracker.IsExpectedReturn("headset",["headset","speaker"]));
     }
+    [Fact] public void DelayedRemovalExemptsOnlyEarlierListedNotificationsWithinTheReturnDeadline()
+    {
+        var clock=new Clock();var tracker=new ReconnectionTracker(clock);
+        tracker.Observe(Snapshot(true));tracker.Observe(Snapshot(false));
+        long removalReceived=clock.GetTimestamp();
+        clock.Now+=TimeSpan.FromSeconds(1);tracker.Observe(Snapshot(true));
+        Assert.True(tracker.IsDelayedRemoval("headset",removalReceived,["headset","speaker"]));
+        Assert.False(tracker.IsDelayedRemoval("headset",clock.GetTimestamp(),["headset","speaker"]));
+        Assert.False(tracker.IsDelayedRemoval("headset",removalReceived,["speaker"]));
+        Assert.False(tracker.IsDelayedRemoval("speaker",removalReceived,["headset","speaker"]));
+        clock.Now+=TimeSpan.FromSeconds(6);
+        Assert.False(tracker.IsDelayedRemoval("headset",removalReceived,["headset","speaker"]));
+    }
 }
