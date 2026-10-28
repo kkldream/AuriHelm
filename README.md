@@ -7,9 +7,9 @@
 <p align="center">從系統匣掌握 Windows 音量與音訊輸出。</p>
 
 <p align="center">
-  <a href="https://github.com/kkldream/AuriHelm/actions/workflows/build.yml"><img src="https://github.com/kkldream/AuriHelm/actions/workflows/build.yml/badge.svg" alt="Windows 建置與測試"></a>
   <img src="https://img.shields.io/badge/Windows-11_x64-0078D4" alt="Windows 11 x64">
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-22A7F0" alt="MIT 授權"></a>
+  · <a href="https://github.com/kkldream/AuriHelm/actions/workflows/build.yml">建置與測試</a>
 </p>
 
 AuriHelm 是免費、開放原始碼的 Windows 音訊工具。快速調整各應用程式音量，整理常用輸出，並在耳機開關或裝置連線改變時，依你設定的優先序切換。
@@ -18,10 +18,17 @@ AuriHelm 是免費、開放原始碼的 Windows 音訊工具。快速調整各�
 
 ## 隨手調整，集中管理
 
-| 系統匣快速選單 | 完整面板 |
-|:--|:--|
-| 調整目前輸出、總音量與應用程式音量 | 查看音訊裝置、混音及完整設定 |
-| ![快速選單](.github/assets/quick-menu.png) | ![裝置與音量完整面板](.github/assets/devices-volume.png) |
+在完整面板查看音訊裝置、總音量與各應用程式，常用控制集中在同一處。
+
+![裝置與音量完整面板](.github/assets/devices-volume.png)
+
+## 從系統匣快速調整
+
+不必打開完整設定，點一下系統匣就能調整目前輸出與應用程式音量。
+
+<p align="center">
+  <img src=".github/assets/quick-menu.png" width="430" alt="系統匣快速選單">
+</p>
 
 ## 讓常用聲音留在眼前
 
