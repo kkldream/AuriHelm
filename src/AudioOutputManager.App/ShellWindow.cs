@@ -281,7 +281,7 @@ internal sealed partial class ShellWindow
     public async Task QuitAsync()
     {
         if(!await ResolvePending())return;
-        try{await SaveWindow();}catch(Exception ex){Error(ex);}quitting=true;meters.Stop();quickEntrance.Stop();trayMenuHost?.Dispose();systemColors.ColorValuesChanged-=colorsChanged;controller.Updated-=OnUpdate;controller.Issue-=OnIssue;controller.Diagnostic-=RecordDiagnostic;if(liveAudio is not null)liveAudio.ValuesChanged-=OnLiveValues;native.Hotkey-=hotkeys.Dispatch;hotkeys.Dispose();full.Close();quick.Close();exit();
+        try{await SaveWindow();}catch(Exception ex){Error(ex);}quitting=true;updateCancellation.Cancel();releaseUpdates.Dispose();updateCancellation.Dispose();meters.Stop();quickEntrance.Stop();trayMenuHost?.Dispose();systemColors.ColorValuesChanged-=colorsChanged;controller.Updated-=OnUpdate;controller.Issue-=OnIssue;controller.Diagnostic-=RecordDiagnostic;if(liveAudio is not null)liveAudio.ValuesChanged-=OnLiveValues;native.Hotkey-=hotkeys.Dispatch;hotkeys.Dispose();full.Close();quick.Close();exit();
     }
     private async Task<bool> ResolvePending()
     {

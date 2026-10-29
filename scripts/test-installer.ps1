@@ -47,15 +47,16 @@ function Get-Tree([string]$Path) {
     return ConvertTo-Json -InputObject @($files) -Compress
 }
 
-function New-Fixture([string]$Name) {
+function New-Fixture([string]$Name, [string]$FinishChoice='') {
     $id = [Guid]::NewGuid().ToString('N')
     $root = Join-Path $runRoot $Name
     $target = Join-Path $root '測試 安裝/Programs/AudioOutputManager'
     $data = Join-Path $root '測試 資料/AudioOutputManager'
     $links = Join-Path $root 'Shortcuts'
+    $desktop = Join-Path $root 'Desktop'
     $key = "Software\AuriHelm.InstallerTests\$id"
     $ownedKeys.Add($key)
-    New-Item -ItemType Directory -Path $root,$data,$links | Out-Null
+    New-Item -ItemType Directory -Path $root,$data,$links,$desktop | Out-Null
     Set-Content -LiteralPath (Join-Path $data 'settings.json') -Value '{"alias":"保留別名","excluded":["chrome.exe"],"priority":["headset","speakers"]}' -Encoding utf8
     Set-Content -LiteralPath (Join-Path $data 'export.json') -Value 'user-owned export' -Encoding utf8
     $fixtureSource = $source.Replace('$LOCALAPPDATA\Programs\AudioOutputManager', $target).
@@ -63,14 +64,43 @@ function New-Fixture([string]$Name) {
         Replace('$LOCALAPPDATA\Programs\..\AudioOutputManager', $data).
         Replace('$SMPROGRAMS\AuriHelm.lnk', (Join-Path $links 'AuriHelm.lnk')).
         Replace('$SMPROGRAMS\Audio Output Manager.lnk', (Join-Path $links 'Audio Output Manager.lnk')).
+        Replace('$DESKTOP\AuriHelm.lnk', (Join-Path $desktop 'AuriHelm.lnk')).
         Replace('Software\Microsoft\Windows\CurrentVersion\Uninstall\AudioOutputManager', $key).
         Replace('"Software\Microsoft\Windows\CurrentVersion\Run" "AudioOutputManager"', ('"Software\Microsoft\Windows\CurrentVersion\Run" "AuriHelm.InstallerTests.' + $id + '"')).
         Replace('Local\AudioOutputManager.$0', ('Local\AuriHelm.InstallerTests.' + $id + '.$0')).
         Replace('"..\src\AudioOutputManager.App\Assets\AuriHelm.ico"', ('"' + (Join-Path $repoRoot 'src/AudioOutputManager.App/Assets/AuriHelm.ico') + '"'))
-    # This is the production NSIS source. Only filesystem/registry/mutex namespaces
-    # and the noninteractive UI mode differ; no failure-injection branch is added.
+    # Run the production transaction and callbacks in isolated namespaces. The
+    # fake payload is never executed: replace only the final launch with a marker.
+    # A selected finish callback is invoked without displaying the wizard.
+    if ($fixtureSource.Contains('Function LaunchApplication')) {
+        $launch = 'Exec ''"$INSTDIR\AudioOutputManager.App.exe"'''
+        Assert-That ($fixtureSource.Contains($launch)) '找不到正式完成頁的啟動命令。'
+        $stub = 'FileOpen $0 "' + (Join-Path $root 'launch-requested.txt') + '" w' + "`n  FileWrite `$0 `"launch requested`"`n  FileClose `$0"
+        $fixtureSource = $fixtureSource.Replace($launch, $stub).
+            Replace('MessageBox MB_ICONEXCLAMATION "$(DesktopShortcutFailed)" /SD IDOK', 'DetailPrint "$(DesktopShortcutFailed)"')
+    }
+    $finishActions = switch ($FinishChoice) {
+        'desktop' { "  SetSilent normal`n  Call CreateDesktopShortcut`n  SetSilent silent" }
+        'desktop-first-only' {
+@'
+!if "${PRODUCT_VERSION}" == "0.0.1-fixture"
+  SetSilent normal
+  Call CreateDesktopShortcut
+  SetSilent silent
+!endif
+'@
+        }
+        'launch' { "  SetSilent normal`n  Call LaunchApplication`n  SetSilent silent" }
+        'silent-callbacks' { "  Call LaunchApplication`n  Call CreateDesktopShortcut" }
+        '' { '' }
+        default { throw '未知的完成頁測試選項。' }
+    }
+    if ($finishActions) {
+        Assert-That ($fixtureSource.Contains('Function LaunchApplication')) '此來源尚未實作完成頁。'
+        $fixtureSource = [regex]::Replace($fixtureSource, '(?m)^  done:\r?$', "  done:`n$finishActions")
+    }
     $fixtureSource = [regex]::Replace($fixtureSource, '(?m)^(\s*MessageBox [^\r\n]*")\r?$', '$1 /SD IDOK')
-    foreach ($forbidden in @('$LOCALAPPDATA\Programs\AudioOutputManager', '$LOCALAPPDATA\AudioOutputManager', '$SMPROGRAMS\AuriHelm.lnk', 'CurrentVersion\Uninstall\AudioOutputManager', 'Local\AudioOutputManager.$0', '"Run" "AudioOutputManager"')) {
+    foreach ($forbidden in @('$LOCALAPPDATA\Programs\AudioOutputManager', '$LOCALAPPDATA\AudioOutputManager', '$SMPROGRAMS\AuriHelm.lnk', '$DESKTOP', 'CurrentVersion\Uninstall\AudioOutputManager', 'Local\AudioOutputManager.$0', '"Run" "AudioOutputManager"')) {
         if ($fixtureSource.Contains($forbidden)) { throw "fixture 仍包含產品命名空間：$forbidden" }
     }
     $fixtureSource = "SilentInstall silent`nSilentUnInstall silent`n" + $fixtureSource
@@ -90,7 +120,7 @@ function New-Fixture([string]$Name) {
         if ($LASTEXITCODE -ne 0) { throw "fixture 編譯失敗：$compileOutput" }
         $executables[$version] = $exe
     }
-    return [pscustomobject]@{ Root=$root; Target=$target; Data=$data; Link=(Join-Path $links 'AuriHelm.lnk'); Key=$key; Executables=$executables }
+    return [pscustomobject]@{ Root=$root; Target=$target; Data=$data; Link=(Join-Path $links 'AuriHelm.lnk'); DesktopLink=(Join-Path $desktop 'AuriHelm.lnk'); LaunchMarker=(Join-Path $root 'launch-requested.txt'); Key=$key; Executables=$executables }
 }
 
 function Invoke-Install($Fixture, [string]$Version, [string]$Arguments='/S') {
@@ -108,6 +138,17 @@ function Install-Old($Fixture) {
     Assert-That (Test-Path -LiteralPath (Join-Path $Fixture.Target 'AudioOutputManager.App.deps.json')) '前置安裝缺少必要檔案。'
 }
 
+function Invoke-Uninstall($Fixture) {
+    $uninstaller = Join-Path $Fixture.Target 'Uninstall.exe'
+    Assert-That ([IO.Path]::GetFullPath($uninstaller).StartsWith($runRoot + [IO.Path]::DirectorySeparatorChar, [StringComparison]::OrdinalIgnoreCase)) '拒絕執行隔離範圍外的解除安裝程式。'
+    $process = Start-Process -FilePath $uninstaller -ArgumentList "/S _?=$($Fixture.Target)" -WindowStyle Hidden -PassThru
+    if (-not $process.WaitForExit(20000)) { $process.Kill(); throw '隔離解除安裝 fixture 逾時。' }
+    $process.Refresh()
+    Assert-That ($process.ExitCode -eq 0) '隔離解除安裝失敗。'
+    Assert-That (-not (Test-Path -LiteralPath (Join-Path $Fixture.Target 'AudioOutputManager.App.exe'))) '解除安裝未移除隔離程式。'
+    Assert-That ((Get-Registration $Fixture.Key) -eq '<absent>') '解除安裝留下隔離登錄。'
+}
+
 function Assert-Original($Fixture, $Files, $Registration, $LinkHash) {
     [pscustomobject]@{ Before=[pscustomobject]@{ Files=$Files; Registration=$Registration; LinkSHA256=$LinkHash }; After=[pscustomobject]@{ Files=(Get-Tree $Fixture.Target); Registration=(Get-Registration $Fixture.Key); LinkSHA256=(Get-FileHash -LiteralPath $Fixture.Link).Hash } } | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $Fixture.Root 'rollback-comparison.json') -Encoding utf8
     Assert-That ((Get-Tree $Fixture.Target) -eq $Files) '失敗後原程式目錄不一致。'
@@ -117,9 +158,9 @@ function Assert-Original($Fixture, $Files, $Registration, $LinkHash) {
     Assert-That ((Get-Content -LiteralPath (Join-Path $Fixture.Data 'export.json') -Raw).Trim() -eq 'user-owned export') '使用者匯出被破壞。'
 }
 
-function Test-Case([string]$Name, [scriptblock]$Body) {
+function Test-Case([string]$Name, [scriptblock]$Body, [string]$FinishChoice='') {
     if ($Name -notlike $Case) { return }
-    $fixture = New-Fixture $Name
+    $fixture = New-Fixture $Name $FinishChoice
     try { & $Body $fixture } catch {
         $results.Add([pscustomobject]@{ Name=$Name; Passed=$false; Root=$fixture.Root; Error=$_.Exception.Message })
         throw
@@ -231,6 +272,80 @@ try {
         Assert-That (-not (Test-Path -LiteralPath $f.Target)) '首次安裝失敗仍留下啟用的程式目錄。'
         Assert-That ((Get-Registration $f.Key) -eq '<absent>') '首次安裝失敗留下解除安裝登錄。'
         Assert-That ((Get-FileHash -LiteralPath $f.Link).Hash -eq $hash) '首次安裝失敗破壞原捷徑。'
+    }
+    Test-Case 'silent-install-does-not-launch-or-create-desktop' {
+        param($f)
+        Assert-That ((Invoke-Install $f '0.0.2-fixture') -eq 0) '靜默安裝失敗。'
+        Assert-That (-not (Test-Path -LiteralPath $f.LaunchMarker)) '靜默安裝啟動程式。'
+        Assert-That (-not (Test-Path -LiteralPath $f.DesktopLink)) '靜默安裝建立桌面捷徑。'
+    } 'silent-callbacks'
+    Test-Case 'finish-launch-runs-only-selected-callback' {
+        param($f)
+        Assert-That ((Invoke-Install $f '0.0.2-fixture') -eq 0) '選擇啟動的安裝失敗。'
+        Assert-That (Test-Path -LiteralPath $f.LaunchMarker) '選擇啟動後未執行回呼。'
+        Assert-That (-not (Test-Path -LiteralPath $f.DesktopLink)) '未選桌面捷徑仍建立。'
+    } 'launch'
+    Test-Case 'desktop-opt-in-unmodified-link-is-removed' {
+        param($f)
+        Assert-That ((Invoke-Install $f '0.0.2-fixture') -eq 0) '選擇桌面捷徑的安裝失敗。'
+        Assert-That (Test-Path -LiteralPath $f.DesktopLink) '未建立桌面捷徑。'
+        Assert-That ((Get-FileHash -LiteralPath $f.DesktopLink).Hash -eq (Get-FileHash -LiteralPath (Join-Path $f.Target 'desktop-shortcut.lnk')).Hash) '桌面捷徑與擁有證據不同。'
+        Assert-That (-not (Test-Path -LiteralPath $f.LaunchMarker)) '只選桌面捷徑卻啟動程式。'
+        Invoke-Uninstall $f
+        Assert-That (-not (Test-Path -LiteralPath $f.DesktopLink)) '未移除本程式建立的未改動捷徑。'
+        Assert-That (Test-Path -LiteralPath (Join-Path $f.Data 'settings.json')) '解除安裝未保留設定。'
+    } 'desktop'
+    Test-Case 'desktop-existing-name-is-never-overwritten' {
+        param($f)
+        Set-Content -LiteralPath $f.DesktopLink -Value 'user-owned same-name file'
+        $hash = (Get-FileHash -LiteralPath $f.DesktopLink).Hash
+        Assert-That ((Invoke-Install $f '0.0.2-fixture') -eq 0) '同名桌面檔案阻止安裝。'
+        Assert-That ((Get-FileHash -LiteralPath $f.DesktopLink).Hash -eq $hash) '覆寫使用者既有同名檔案。'
+        Assert-That (-not (Test-Path -LiteralPath (Join-Path $f.Target 'desktop-shortcut.lnk'))) '錯誤認領既有同名檔案。'
+        Invoke-Uninstall $f
+        Assert-That ((Get-FileHash -LiteralPath $f.DesktopLink).Hash -eq $hash) '解除安裝刪除非本程式建立的檔案。'
+    } 'desktop'
+    Test-Case 'desktop-same-length-edited-link-is-preserved' {
+        param($f)
+        Assert-That ((Invoke-Install $f '0.0.2-fixture') -eq 0) '前置安裝失敗。'
+        $bytes = [IO.File]::ReadAllBytes($f.DesktopLink)
+        $bytes[$bytes.Length - 1] = $bytes[$bytes.Length - 1] -bxor 1
+        [IO.File]::WriteAllBytes($f.DesktopLink, $bytes)
+        $hash = (Get-FileHash -LiteralPath $f.DesktopLink).Hash
+        Invoke-Uninstall $f
+        Assert-That ((Get-FileHash -LiteralPath $f.DesktopLink).Hash -eq $hash) '刪除已被使用者修改、但長度相同的捷徑。'
+    } 'desktop'
+    Test-Case 'desktop-ownership-survives-silent-upgrade' {
+        param($f)
+        Install-Old $f
+        $hash = (Get-FileHash -LiteralPath $f.DesktopLink).Hash
+        Assert-That ((Invoke-Install $f '0.0.2-fixture') -eq 0) '升級失敗。'
+        Assert-That ((Get-FileHash -LiteralPath $f.DesktopLink).Hash -eq $hash) '升級覆寫既有捷徑。'
+        Assert-That ((Get-FileHash -LiteralPath (Join-Path $f.Target 'desktop-shortcut.lnk')).Hash -eq $hash) '升級遺失擁有證據。'
+        Invoke-Uninstall $f
+        Assert-That (-not (Test-Path -LiteralPath $f.DesktopLink)) '升級後無法移除未改動捷徑。'
+    } 'desktop-first-only'
+    Test-Case 'desktop-reference-survives-upgrade-rollback' {
+        param($f)
+        Install-Old $f
+        $files = Get-Tree $f.Target
+        $registration = Get-Registration $f.Key
+        $linkHash = (Get-FileHash -LiteralPath $f.Link).Hash
+        $desktopHash = (Get-FileHash -LiteralPath $f.DesktopLink).Hash
+        $handle = [IO.File]::Open($f.Link, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+        try { Assert-That ((Invoke-Install $f '0.0.2-fixture') -eq 1) '鎖定捷徑未觸發升級回復。' } finally { $handle.Dispose() }
+        Assert-Original $f $files $registration $linkHash
+        Assert-That ((Get-FileHash -LiteralPath $f.DesktopLink).Hash -eq $desktopHash) '升級回復改動桌面捷徑。'
+        Invoke-Uninstall $f
+        Assert-That (-not (Test-Path -LiteralPath $f.DesktopLink)) '回復後遺失原捷徑擁有證據。'
+    } 'desktop'
+    Test-Case 'unowned-desktop-link-is-preserved-on-uninstall' {
+        param($f)
+        Install-Old $f
+        Set-Content -LiteralPath $f.DesktopLink -Value 'user-created later'
+        $hash = (Get-FileHash -LiteralPath $f.DesktopLink).Hash
+        Invoke-Uninstall $f
+        Assert-That ((Get-FileHash -LiteralPath $f.DesktopLink).Hash -eq $hash) '解除安裝刪除使用者後來建立的捷徑。'
     }
 } finally {
     foreach ($key in $ownedKeys) {

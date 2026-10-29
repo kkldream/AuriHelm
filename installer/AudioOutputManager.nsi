@@ -106,12 +106,137 @@ Var RollbackFailed
 
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_INSTFILES
+!define MUI_FINISHPAGE_RUN "$INSTDIR\AudioOutputManager.App.exe"
+!define MUI_FINISHPAGE_RUN_TEXT "$(LaunchNow)"
+!define MUI_FINISHPAGE_RUN_FUNCTION LaunchApplication
+!define MUI_FINISHPAGE_SHOWREADME
+!define MUI_FINISHPAGE_SHOWREADME_TEXT "$(CreateDesktop)"
+!define MUI_FINISHPAGE_SHOWREADME_NOTCHECKED
+!define MUI_FINISHPAGE_SHOWREADME_FUNCTION CreateDesktopShortcut
 !insertmacro MUI_PAGE_FINISH
 UninstPage custom un.DataOptions un.DataOptionsLeave
 !insertmacro MUI_UNPAGE_INSTFILES
 !insertmacro MUI_UNPAGE_FINISH
 !insertmacro MUI_LANGUAGE "TradChinese"
 !insertmacro MUI_LANGUAGE "English"
+
+LangString LaunchNow ${LANG_TRADCHINESE} "立即開啟 AuriHelm"
+LangString LaunchNow ${LANG_ENGLISH} "Open AuriHelm now"
+LangString CreateDesktop ${LANG_TRADCHINESE} "建立桌面捷徑"
+LangString CreateDesktop ${LANG_ENGLISH} "Create a desktop shortcut"
+LangString LaunchFailed ${LANG_TRADCHINESE} "無法開啟 AuriHelm，請從開始功能表重試。"
+LangString LaunchFailed ${LANG_ENGLISH} "AuriHelm could not be opened. Please retry from the Start menu."
+LangString DesktopShortcutFailed ${LANG_TRADCHINESE} "未建立桌面捷徑：同名檔案已存在，或無法寫入桌面。既有檔案已保留。"
+LangString DesktopShortcutFailed ${LANG_ENGLISH} "No desktop shortcut was created: a file already exists or the desktop is not writable. Existing files were preserved."
+
+Function LaunchApplication
+  IfSilent launchdone
+  ClearErrors
+  Exec '"$INSTDIR\AudioOutputManager.App.exe"'
+  ${If} ${Errors}
+    MessageBox MB_ICONEXCLAMATION "$(LaunchFailed)" /SD IDOK
+  ${EndIf}
+  launchdone:
+FunctionEnd
+
+Function CreateDesktopShortcut
+  IfSilent desktopdone
+  ; The reference is private to this installation. CopyFile's fail-if-exists
+  ; flag also protects a same-name file created after our existence check.
+  System::Call 'kernel32::GetFileAttributesW(w "$DESKTOP\AuriHelm.lnk") i .r0'
+  ${If} $0 != -1
+    Goto desktopfailed
+  ${EndIf}
+  SetOutPath "$INSTDIR"
+  ClearErrors
+  CreateShortcut "$INSTDIR\desktop-shortcut.lnk" "$INSTDIR\AudioOutputManager.App.exe" "" "$INSTDIR\Assets\AuriHelm.ico"
+  IfErrors desktopfailed
+  System::Call 'kernel32::CopyFileW(w "$INSTDIR\desktop-shortcut.lnk", w "$DESKTOP\AuriHelm.lnk", i 1) i .r0'
+  ${If} $0 == 0
+    Delete "$INSTDIR\desktop-shortcut.lnk"
+    Goto desktopfailed
+  ${EndIf}
+  Goto desktopdone
+  desktopfailed:
+    MessageBox MB_ICONEXCLAMATION "$(DesktopShortcutFailed)" /SD IDOK
+  desktopdone:
+FunctionEnd
+
+Function un.RemoveOwnedDesktopShortcut
+  ; Compare the exact original bytes, not just the target path. An edited or
+  ; replaced shortcut belongs to the user, even if it still starts this app.
+  Push $0
+  Push $1
+  Push $2
+  Push $3
+  Push $4
+  Push $5
+  Push $6
+  Push $7
+  StrCpy $7 0
+  System::Call 'kernel32::GetFileAttributesW(w "$INSTDIR\desktop-shortcut.lnk") i .r0'
+  ${If} $0 == -1
+    Goto desktopcheckdone
+  ${EndIf}
+  IntOp $0 $0 & 0x410
+  ${If} $0 != 0
+    Goto desktopcheckdone
+  ${EndIf}
+  System::Call 'kernel32::GetFileAttributesW(w "$DESKTOP\AuriHelm.lnk") i .r0'
+  ${If} $0 == -1
+    Goto desktopcheckdone
+  ${EndIf}
+  IntOp $0 $0 & 0x410
+  ${If} $0 != 0
+    Goto desktopcheckdone
+  ${EndIf}
+  ClearErrors
+  FileOpen $0 "$INSTDIR\desktop-shortcut.lnk" r
+  IfErrors desktopcheckdone
+  FileOpen $1 "$DESKTOP\AuriHelm.lnk" r
+  IfErrors desktopclosefirst
+  FileSeek $0 0 END $2
+  FileSeek $1 0 END $3
+  IfErrors desktopcloseboth
+  ${If} $2 != $3
+  ${OrIf} $2 == 0
+  ${OrIf} $2 > 65536
+    Goto desktopcloseboth
+  ${EndIf}
+  FileSeek $0 0 SET
+  FileSeek $1 0 SET
+  IfErrors desktopcloseboth
+  StrCpy $4 0
+  desktopcompare:
+    FileReadByte $0 $5
+    IfErrors desktopcloseboth
+    FileReadByte $1 $6
+    IfErrors desktopcloseboth
+    ${If} $5 != $6
+      Goto desktopcloseboth
+    ${EndIf}
+    IntOp $4 $4 + 1
+    ${If} $4 < $2
+      Goto desktopcompare
+    ${EndIf}
+    StrCpy $7 1
+  desktopcloseboth:
+    FileClose $1
+  desktopclosefirst:
+    FileClose $0
+  ${If} $7 == 1
+    Delete "$DESKTOP\AuriHelm.lnk"
+  ${EndIf}
+  desktopcheckdone:
+  Pop $7
+  Pop $6
+  Pop $5
+  Pop $4
+  Pop $3
+  Pop $2
+  Pop $1
+  Pop $0
+FunctionEnd
 
 !macro VerifyPaths PREFIX
 Function ${PREFIX}VerifyPaths
@@ -316,6 +441,12 @@ Section "Install"
   IfFileExists "$INSTDIR\." 0 swapnew
     ; Do not replace an unrelated or incomplete directory silently.
     IfFileExists "$INSTDIR\AudioOutputManager.App.exe" 0 badstage
+    ; Keep desktop ownership across upgrades, including a silent upgrade.
+    IfFileExists "$INSTDIR\desktop-shortcut.lnk" 0 desktopreferencecopied
+      ClearErrors
+      CopyFiles /SILENT "$INSTDIR\desktop-shortcut.lnk" "$Stage\desktop-shortcut.lnk"
+      IfErrors badstage
+    desktopreferencecopied:
     ClearErrors
     IfFileExists "$Previous\." 0 moveold
     RMDir /r "$Previous"
@@ -350,7 +481,8 @@ Section "Install"
     Rename "$ShortcutStage" "$SMPROGRAMS\AuriHelm.lnk"
     IfErrors rollbacknew
     Delete "$SMPROGRAMS\Audio Output Manager.lnk"
-    ; No launch, startup entry, service, task or background update is installed here.
+    ; Optional launch/desktop actions belong to the interactive finish page.
+    ; No startup entry, service, task or background update is installed here.
     Goto done
   rollbacknew:
     StrCpy $RollbackFailed 0
@@ -417,6 +549,7 @@ Section "Uninstall"
   Call un.VerifyPaths
   Call un.CloseExisting
   SetOutPath "$TEMP"
+  Call un.RemoveOwnedDesktopShortcut
   Delete "$SMPROGRAMS\Audio Output Manager.lnk"
   Delete "$SMPROGRAMS\AuriHelm.lnk"
   DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "AudioOutputManager"

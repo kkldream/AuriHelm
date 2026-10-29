@@ -272,7 +272,7 @@ internal sealed partial class ShellWindow
     {
         string version=typeof(ShellWindow).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0]
             ??typeof(ShellWindow).Assembly.GetName().Version?.ToString(3)??"0.1.0";
-        pageHost.Children.Add(Card(Row(Stack(Text("AuriHelm · "+version,16),Text(T("候選測試版；完整驗收尚未完成。","Release candidate; full acceptance is pending."),12,true)),Button(T("檢查更新","Check for updates"),()=>{OnIssue(T("尚未指定公開發佈儲存庫，未進行網路查詢。","No release repository configured; no network request made."));return Task.CompletedTask;}))));
+        pageHost.Children.Add(UpdateCard(version));
         pageHost.Children.Add(Card(Rows(
             Row(Stack(Text(T("本機診斷","Local diagnostics"),16),Text(T("只保留必要事件碼，不含裝置識別碼、別名、路徑或音訊。","Only local event codes; no device IDs, aliases, paths or audio."),12,true)),Tag(T("僅本機","Local only"))),
             Row(Stack(Text(T("診斷紀錄","Diagnostic log")),Text(T("匯出前先預覽；由你選擇儲存位置。","Preview before export, then choose where to save."),12,true)),Actions(Button(T("清除紀錄","Clear logs"),()=>{diagnostics.Clear();OnIssue(T("已清除本機紀錄。","Local logs cleared."));return Task.CompletedTask;}),Button(T("預覽並匯出","Preview and export"),ExportDiagnostics))))));
