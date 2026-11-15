@@ -35,6 +35,8 @@ if ($Publish) {
     & $dotnetPath publish src/AudioOutputManager.App -c Release -r win-x64 --self-contained true --no-restore -o $publishPath --nologo
     if ($LASTEXITCODE -ne 0) { throw '發佈目錄產生失敗。' }
     if (-not (Test-Path -LiteralPath (Join-Path $publishPath 'AudioOutputManager.App.pri'))) { throw '發佈目錄缺少應用程式 PRI，已停止打包。' }
+    # Portable PDB files can contain build-machine paths and are not needed at runtime.
+    Get-ChildItem -LiteralPath $publishPath -Filter '*.pdb' -Recurse -File | ForEach-Object { Remove-Item -LiteralPath $_.FullName }
     Copy-Item -LiteralPath LICENSE,THIRD-PARTY-NOTICES.md -Destination $publishPath
     & (Join-Path $PSScriptRoot 'collect-licenses.ps1') -Destination $publishPath
     Get-FileHash (Join-Path $publishPath 'AudioOutputManager.App.exe'),(Join-Path $publishPath 'AudioOutputManager.App.dll') -Algorithm SHA256 | Format-List
