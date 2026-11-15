@@ -133,5 +133,14 @@ internal sealed class VolumeRow : Grid
         }
         protected override void OnPointerWheelChanged(PointerRoutedEventArgs e)
         {if(FocusState!=FocusState.Unfocused)base.OnPointerWheelChanged(e);}
+        protected override void OnKeyDown(KeyRoutedEventArgs e)
+        {
+            if(e.Key is global::Windows.System.VirtualKey.PageUp or global::Windows.System.VirtualKey.PageDown)
+            {
+                Value=Math.Clamp(Value+(e.Key==global::Windows.System.VirtualKey.PageUp?LargeChange:-LargeChange),Minimum,Maximum);
+                e.Handled=true;
+            }
+            else base.OnKeyDown(e);
+        }
     }
 }
