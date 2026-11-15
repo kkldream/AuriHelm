@@ -24,7 +24,10 @@ internal sealed partial class ShellWindow
             FocusVisualPrimaryBrush=theme.Blue,FocusVisualSecondaryBrush=theme.Head};
         updateDetails=new Microsoft.UI.Xaml.Controls.Border{Padding=new(16,0,16,14),Child=Stack(updateMessage,updateLink)};
         var content=new StackPanel();
-        content.Children.Add(Row(Stack(Text("AuriHelm · "+version,16),Text(T("候選測試版；完整驗收尚未完成。","Release candidate; full acceptance is pending."),12,true)),updateButton));
+        string description=version.Contains('-')
+            ?T("候選測試版；完整驗收尚未完成。","Release candidate; full acceptance is pending.")
+            :T("只在你按下按鈕時查詢 GitHub 正式版本。","Checks GitHub stable releases only when requested.");
+        content.Children.Add(Row(Stack(Text("AuriHelm · "+version,16),Text(description,12,true)),updateButton));
         content.Children.Add(updateDetails);RefreshUpdateResult();
         return Card(content);
     }

@@ -14,7 +14,7 @@
 
 AuriHelm 是免費、開放原始碼的 Windows 音訊工具。快速調整各應用程式音量，整理常用輸出，並在耳機開關或裝置連線改變時，依你設定的優先序切換。
 
-**目前版本：0.1.0-rc.5 候選測試版。** [下載 Windows 11 x64 安裝包](https://github.com/kkldream/AuriHelm/releases/download/v0.1.0-rc.5/AuriHelm-0.1.0-rc.5-win-x64-setup.exe) · [版本說明與 SHA-256](https://github.com/kkldream/AuriHelm/releases/tag/v0.1.0-rc.5)。安裝包未簽章，使用前請先閱讀下方限制；也可以依[貢獻指南](CONTRIBUTING.md#建置與測試)自行建置。
+**目前版本：0.1.0。** [下載 Windows 11 x64 安裝包](https://github.com/kkldream/AuriHelm/releases/download/v0.1.0/AuriHelm-0.1.0-win-x64-setup.exe) · [版本說明與 SHA-256](https://github.com/kkldream/AuriHelm/releases/tag/v0.1.0)。安裝包未簽章，使用前請先閱讀下方限制；也可以依[貢獻指南](CONTRIBUTING.md#建置與測試)自行建置。
 
 ## 隨手調整，集中管理
 
@@ -67,9 +67,9 @@ AuriHelm 是免費、開放原始碼的 Windows 音訊工具。快速調整各�
 - Windows 11 x64。Windows 10、ARM64 與其他耳機的私有電源／電量協定不在目前支援範圍。
 - 一般輸出裝置透過 Windows 音訊端點管理；專用耳機狀態偵測目前限 PRO X 2 LIGHTSPEED。主要實機驗證組合為 PRO X 2 與 Realtek。
 - 不提供麥克風管理、個別應用程式輸出路由或音效處理。
-- 候選安裝包未簽章；程式內更新查詢尚未接上 Releases。乾淨作業系統部署、完整 DPI／多螢幕／鍵盤組合，以及睡眠喚醒與長時間常駐仍有待驗項目。
-- RC.5 的 USB 通知競態修正已通過受控回歸與 CI，尚未實體拔插重測；本版完整安裝包的首次安裝、升級與啟動也尚未重做實機驗收。
-- 候選版可能存在相容性問題，歡迎透過 [Issues](https://github.com/kkldream/AuriHelm/issues) 提供可重現步驟。
+- 安裝包未簽章；程式內可手動查詢 GitHub 正式版本並開啟下載頁，不自動下載或安裝。
+- 已驗證 Windows Sandbox 的離線安裝與啟動；這不代表所有乾淨實體電腦都已驗收。完整 DPI／多螢幕／高對比／朗讀組合、其他 USB 孔與集線器，以及多輪睡眠與長期使用仍未全面涵蓋。
+- 若遇到相容性問題，歡迎透過 [Issues](https://github.com/kkldream/AuriHelm/issues) 提供可重現步驟。
 
 ## 本機資料與隱私
 
