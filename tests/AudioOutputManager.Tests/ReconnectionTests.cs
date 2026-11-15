@@ -10,11 +10,12 @@ public sealed class ReconnectionTests
     private sealed class Headset : IHeadsetProvider
     {
         public bool Connected=true;
+        public HeadsetState State=HeadsetState.On;
         public int Queries;
         public Task<HeadsetReading> QueryAsync(CancellationToken cancellation)
         {
             Interlocked.Increment(ref Queries);
-            return Task.FromResult(Connected?new HeadsetReading(HeadsetState.On,DateTimeOffset.UtcNow,69,ContainerId:Container):new(HeadsetState.Unknown,DateTimeOffset.UtcNow));
+            return Task.FromResult(Connected?new HeadsetReading(State,DateTimeOffset.UtcNow,State==HeadsetState.On?69:null,ContainerId:Container):new(HeadsetState.Unknown,DateTimeOffset.UtcNow));
         }
     }
     private sealed class Audio : IAudioService
@@ -87,6 +88,41 @@ public sealed class ReconnectionTests
     {
         using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(8));
         while(!condition())await Task.Delay(20,timeout.Token);
+    }
+    [Fact] public async Task PowerOnRestoresDefaultAfterAnUnknownReadingWithoutStoppingAutomatic()
+    {
+        string directory=Path.Combine(Path.GetTempPath(),"aom-power-return-"+Guid.NewGuid().ToString("N"));
+        var audio=new Audio();var headset=new Headset();
+        new SettingsStore(directory).Save(new(){Automatic=true,Priority=["headset","speaker"]});
+        try
+        {
+            using var controller=new AppController(directory,audio,headset);
+            await controller.StartAsync();
+            await Until(()=>controller.Snapshot.CurrentId=="headset"&&controller.Snapshot.RolesConsistent);
+            headset.State=HeadsetState.Off;
+            await Until(()=>controller.Snapshot.CurrentId=="speaker"&&controller.Snapshot.RolesConsistent);
+            Assert.True(controller.Settings.Automatic);
+            // Recorded hardware order: Off -> one valid On -> Unknown -> defaults restored.
+            // The USB endpoint remains available throughout this power transition.
+            headset.State=HeadsetState.On;
+            await Until(()=>controller.Headset.State==HeadsetState.On);
+            headset.State=HeadsetState.Unknown;
+            await Until(()=>controller.Headset.State==HeadsetState.Unknown);
+            int writes=audio.RoleWrites;
+            audio.External("headset");
+            int queries=headset.Queries;
+            await Until(()=>headset.Queries>queries);
+            Assert.True(controller.Settings.Automatic);
+            Assert.Equal(writes,audio.RoleWrites);
+            Assert.Equal("headset",controller.Snapshot.CurrentId);
+            headset.State=HeadsetState.On;
+            queries=headset.Queries;
+            await Until(()=>headset.Queries>=queries+3);
+            audio.External("speaker");
+            await Until(()=>!controller.Settings.Automatic);
+            Assert.Equal("speaker",controller.Snapshot.CurrentId);
+        }
+        finally{Directory.Delete(directory,true);}
     }
     [Fact] public async Task ExclusionSavePreservesActiveAutomaticPolicyAndFailedSavePreservesEffectiveSettings()
     {

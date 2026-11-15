@@ -79,6 +79,7 @@ public sealed class AppController : IDisposable
                     long decisionGeneration=switches.Generation;
                     UpdateSnapshot(await Audio.ReadAsync());
                     Headset=reading; failures=reading.State==HeadsetState.Unknown?Math.Min(failures+1,4):0;
+                    reconnections.ObserveHeadset(HeadsetId,reading);
                     policy.Observe(reading,DateTimeOffset.UtcNow,Settings.OffConfirmationSeconds);
                     if(lastAutomaticTarget is not null&&!Snapshot.Outputs.Any(d=>d.Id==lastAutomaticTarget&&d.Available))lastAutomaticTarget=null;
                     if(Snapshot.Outputs.Any(d=>!Settings.KnownDevices.ContainsKey(d.Id)))

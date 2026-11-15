@@ -52,4 +52,50 @@ public sealed class ReconnectionTrackerTests
         clock.Now+=TimeSpan.FromSeconds(6);
         Assert.False(tracker.IsDelayedRemoval("headset",removalReceived,["headset","speaker"]));
     }
+    [Fact] public void OnlyReliablePowerCycleGrantsBoundedReturnWithoutEndpointRemoval()
+    {
+        var clock=new Clock();var tracker=new ReconnectionTracker(clock);tracker.Observe(Snapshot(true));
+        tracker.ObserveHeadset("headset",new(HeadsetState.On,clock.Now));
+        Assert.False(tracker.IsExpectedReturn("headset",["headset","speaker"]));
+        clock.Now+=TimeSpan.FromMilliseconds(500);
+        tracker.ObserveHeadset("headset",new(HeadsetState.Off,clock.Now));
+        clock.Now+=TimeSpan.FromMilliseconds(500);
+        tracker.ObserveHeadset("headset",new(HeadsetState.On,clock.Now));
+        Assert.True(tracker.IsExpectedReturn("headset",["headset","speaker"]));
+        Assert.False(tracker.IsExpectedReturn("headset",["speaker"]));
+        Assert.False(tracker.IsDelayedRemoval("headset",clock.GetTimestamp()-1,["headset","speaker"]));
+        clock.Now+=TimeSpan.FromSeconds(1);
+        tracker.ObserveHeadset("headset",new(HeadsetState.Unknown,clock.Now));
+        Assert.True(tracker.IsExpectedReturn("headset",["headset","speaker"]));
+        clock.Now+=TimeSpan.FromSeconds(5);
+        tracker.ObserveHeadset("headset",new(HeadsetState.On,clock.Now));
+        Assert.False(tracker.IsExpectedReturn("headset",["headset","speaker"]));
+    }
+    [Fact] public void UnknownAndStaleOrRepeatedSamplesCannotInventPowerReturn()
+    {
+        var clock=new Clock();var tracker=new ReconnectionTracker(clock);tracker.Observe(Snapshot(true));
+        tracker.ObserveHeadset("headset",new(HeadsetState.Unknown,clock.Now));
+        clock.Now+=TimeSpan.FromMilliseconds(500);
+        tracker.ObserveHeadset("headset",new(HeadsetState.On,clock.Now));
+        Assert.False(tracker.IsExpectedReturn("headset",["headset","speaker"]));
+        tracker.ObserveHeadset("headset",new(HeadsetState.Off,clock.Now-TimeSpan.FromSeconds(3)));
+        tracker.ObserveHeadset("headset",new(HeadsetState.Off,clock.Now));
+        clock.Now+=TimeSpan.FromMilliseconds(500);
+        tracker.ObserveHeadset("headset",new(HeadsetState.On,clock.Now));
+        Assert.False(tracker.IsExpectedReturn("headset",["headset","speaker"]));
+    }
+    [Fact] public void SettledPowerReturnAndExplicitResetKeepLaterManualChoicesEffective()
+    {
+        var clock=new Clock();var tracker=new ReconnectionTracker(clock);tracker.Observe(Snapshot(true));
+        tracker.ObserveHeadset("headset",new(HeadsetState.Off,clock.Now));
+        clock.Now+=TimeSpan.FromMilliseconds(500);tracker.ObserveHeadset("headset",new(HeadsetState.On,clock.Now));
+        tracker.Settle(Snapshot(true,"headset"),"headset",HeadsetState.Unknown,true);
+        Assert.True(tracker.IsExpectedReturn("headset",["headset","speaker"]));
+        tracker.Settle(Snapshot(true,"headset"),"headset",HeadsetState.On,true);
+        Assert.False(tracker.IsExpectedReturn("headset",["headset","speaker"]));
+        clock.Now+=TimeSpan.FromMilliseconds(500);tracker.ObserveHeadset("headset",new(HeadsetState.Off,clock.Now));
+        clock.Now+=TimeSpan.FromMilliseconds(500);tracker.ObserveHeadset("headset",new(HeadsetState.On,clock.Now));
+        tracker.ClearPending();
+        Assert.False(tracker.IsExpectedReturn("headset",["headset","speaker"]));
+    }
 }
