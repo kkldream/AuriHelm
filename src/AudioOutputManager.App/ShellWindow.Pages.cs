@@ -275,7 +275,7 @@ internal sealed partial class ShellWindow
         pageHost.Children.Add(UpdateCard(version));
         pageHost.Children.Add(Card(Rows(
             Row(Stack(Text(T("本機診斷","Local diagnostics"),16),Text(T("只保留必要事件碼，不含裝置識別碼、別名、路徑或音訊。","Only local event codes; no device IDs, aliases, paths or audio."),12,true)),Tag(T("僅本機","Local only"))),
-            Row(Stack(Text(T("診斷紀錄","Diagnostic log")),Text(T("匯出前先預覽；由你選擇儲存位置。","Preview before export, then choose where to save."),12,true)),Actions(Button(T("清除紀錄","Clear logs"),()=>{diagnostics.Clear();OnIssue(T("已清除本機紀錄。","Local logs cleared."));return Task.CompletedTask;}),Button(T("預覽並匯出","Preview and export"),ExportDiagnostics))))));
+            Row(Stack(Text(T("診斷紀錄","Diagnostic log")),Text(T("匯出前先預覽；由你選擇儲存位置。","Preview before export, then choose where to save."),12,true)),Actions(Button(T("清除紀錄","Clear logs"),()=>{diagnostics.Clear();uiIssue=T("已清除本機紀錄。","Local logs cleared.");UpdateStatus();return Task.CompletedTask;}),Button(T("預覽並匯出","Preview and export"),ExportDiagnostics))))));
         pageHost.Children.Add(Card(Disclosure("licenses",T("開放原始碼與授權","Open source and licenses"),Inset(Text(T("Copyright © 2026 Kerry (kkldream)。本專案採 MIT 授權；第三方著作權及授權見 THIRD-PARTY-NOTICES.md。","Copyright © 2026 Kerry (kkldream). Licensed under MIT. Third-party notices: THIRD-PARTY-NOTICES.md."),12,true)))));
     }
     private async Task ExportDiagnostics()
